@@ -469,6 +469,21 @@ type Configuration struct {
 	// http://nginx.org/en/docs/stream/ngx_stream_proxy_module.html#proxy_timeout
 	ProxyStreamTimeout string `json:"proxy-stream-timeout,omitempty"`
 
+	// When a connection to the proxied server cannot be established, determines whether
+	// a client connection will be passed to the next server.
+	// http://nginx.org/en/docs/stream/ngx_stream_proxy_module.html#proxy_next_upstream
+	ProxyStreamNextUpstream bool `json:"proxy-stream-next-upstream,omitempty"`
+
+	// Limits the time allowed to pass a connection to the next server.
+	// The 0 value turns off this limitation.
+	// http://nginx.org/en/docs/stream/ngx_stream_proxy_module.html#proxy_next_upstream_timeout
+	ProxyStreamNextUpstreamTimeout string `json:"proxy-stream-next-upstream-timeout,omitempty"`
+
+	// Limits the number of possible tries a request should be passed to the next server.
+	// The 0 value turns off this limitation.
+	// http://nginx.org/en/docs/stream/ngx_stream_proxy_module.html#proxy_next_upstream_tries
+	ProxyStreamNextUpstreamTries int `json:"proxy-stream-next-upstream-tries,omitempty"`
+
 	// Sets the number of datagrams expected from the proxied server in response
 	// to the client request if the UDP protocol is used.
 	// http://nginx.org/en/docs/stream/ngx_stream_proxy_module.html#proxy_responses
@@ -693,6 +708,31 @@ type Configuration struct {
 	// http://nginx.org/en/docs/http/ngx_http_core_module.html#default_type
 	// Default: text/html
 	DefaultType string `json:"default-type"`
+
+	// GlobalRateLimitMemcachedHost configures memcached host.
+	GlobalRateLimitMemcachedHost string `json:"global-rate-limit-memcached-host"`
+
+	// GlobalRateLimitMemcachedPort configures memcached port.
+	GlobalRateLimitMemcachedPort int `json:"global-rate-limit-memcached-port"`
+
+	// GlobalRateLimitMemcachedConnectTimeout configures timeout when connecting to memcached.
+	// The unit is millisecond.
+	GlobalRateLimitMemcachedConnectTimeout int `json:"global-rate-limit-memcached-connect-timeout"`
+
+	// GlobalRateLimitMemcachedMaxIdleTimeout configured how long connections
+	// should be kept alive in idle state. The unit is millisecond.
+	GlobalRateLimitMemcachedMaxIdleTimeout int `json:"global-rate-limit-memcached-max-idle-timeout"`
+
+	// GlobalRateLimitMemcachedPoolSize configures how many connections
+	// should be kept alive in the pool.
+	// Note that this is per NGINX worker. Make sure your memcached server can
+	// handle `MemcachedPoolSize * <nginx worker count> * <nginx replica count>`
+	// simultaneous connections.
+	GlobalRateLimitMemcachedPoolSize int `json:"global-rate-limit-memcached-pool-size"`
+
+	// GlobalRateLimitStatucCode determines the HTTP status code to return
+	// when limit is exceeding during global rate limiting.
+	GlobalRateLimitStatucCode int `json:"global-rate-limit-status-code"`
 }
 
 // NewDefault returns the default nginx configuration
@@ -786,6 +826,9 @@ func NewDefault() Configuration {
 		VariablesHashMaxSize:             2048,
 		UseHTTP2:                         true,
 		ProxyStreamTimeout:               "600s",
+		ProxyStreamNextUpstream:          true,
+		ProxyStreamNextUpstreamTimeout:   "600s",
+		ProxyStreamNextUpstreamTries:     3,
 		Backend: defaults.Backend{
 			ProxyBodySize:            bodySize,
 			ProxyConnectTimeout:      5,
@@ -811,35 +854,40 @@ func NewDefault() Configuration {
 			ProxyHTTPVersion:         "1.1",
 			ProxyMaxTempFileSize:     "1024m",
 		},
-		UpstreamKeepaliveConnections: 320,
-		UpstreamKeepaliveTimeout:     60,
-		UpstreamKeepaliveRequests:    10000,
-		LimitConnZoneVariable:        defaultLimitConnZoneVariable,
-		BindAddressIpv4:              defBindAddress,
-		BindAddressIpv6:              defBindAddress,
-		ZipkinCollectorPort:          9411,
-		ZipkinServiceName:            "nginx",
-		ZipkinSampleRate:             1.0,
-		JaegerCollectorPort:          6831,
-		JaegerServiceName:            "nginx",
-		JaegerSamplerType:            "const",
-		JaegerSamplerParam:           "1",
-		JaegerSamplerPort:            5778,
-		JaegerSamplerHost:            "http://127.0.0.1",
-		DatadogServiceName:           "nginx",
-		DatadogEnvironment:           "prod",
-		DatadogCollectorPort:         8126,
-		DatadogOperationNameOverride: "nginx.handle",
-		DatadogSampleRate:            1.0,
-		DatadogPrioritySampling:      true,
-		LimitReqStatusCode:           503,
-		LimitConnStatusCode:          503,
-		SyslogPort:                   514,
-		NoTLSRedirectLocations:       "/.well-known/acme-challenge",
-		NoAuthLocations:              "/.well-known/acme-challenge",
-		GlobalExternalAuth:           defGlobalExternalAuth,
-		ProxySSLLocationOnly:         false,
-		DefaultType:                  "text/html",
+		UpstreamKeepaliveConnections:           320,
+		UpstreamKeepaliveTimeout:               60,
+		UpstreamKeepaliveRequests:              10000,
+		LimitConnZoneVariable:                  defaultLimitConnZoneVariable,
+		BindAddressIpv4:                        defBindAddress,
+		BindAddressIpv6:                        defBindAddress,
+		ZipkinCollectorPort:                    9411,
+		ZipkinServiceName:                      "nginx",
+		ZipkinSampleRate:                       1.0,
+		JaegerCollectorPort:                    6831,
+		JaegerServiceName:                      "nginx",
+		JaegerSamplerType:                      "const",
+		JaegerSamplerParam:                     "1",
+		JaegerSamplerPort:                      5778,
+		JaegerSamplerHost:                      "http://127.0.0.1",
+		DatadogServiceName:                     "nginx",
+		DatadogEnvironment:                     "prod",
+		DatadogCollectorPort:                   8126,
+		DatadogOperationNameOverride:           "nginx.handle",
+		DatadogSampleRate:                      1.0,
+		DatadogPrioritySampling:                true,
+		LimitReqStatusCode:                     503,
+		LimitConnStatusCode:                    503,
+		SyslogPort:                             514,
+		NoTLSRedirectLocations:                 "/.well-known/acme-challenge",
+		NoAuthLocations:                        "/.well-known/acme-challenge",
+		GlobalExternalAuth:                     defGlobalExternalAuth,
+		ProxySSLLocationOnly:                   false,
+		DefaultType:                            "text/html",
+		GlobalRateLimitMemcachedPort:           11211,
+		GlobalRateLimitMemcachedConnectTimeout: 50,
+		GlobalRateLimitMemcachedMaxIdleTimeout: 10000,
+		GlobalRateLimitMemcachedPoolSize:       50,
+		GlobalRateLimitStatucCode:              429,
 	}
 
 	if klog.V(5).Enabled() {
